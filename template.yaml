@@ -78,9 +78,16 @@ Resources:
       Environment:
         Variables:
           TFC_TOKEN_PATH: !Sub "/${Environment}/TFC_TOKEN"
-          S3_BUCKET: !Ref S3Bucket
+          S3_BUCKET: !Ref TFCStateBucket
           #DRY_RUN: "true"
-      Events:
+      EventInvokeConfig:
+        # Don't want to overwhelm the TFC API, retry once after a minute
+        # Then send it to the SQS DLQ
+        MaximumRetryAttempts: 1
+        DestinationConfig:
+          OnFailure:
+            Type: SQS
+            Destination: !GetAtt FailedEventsQueue.Arn
       Policies:
       - Statement:
         - Sid: SSMDescribeParametersPolicy
@@ -99,12 +106,42 @@ Resources:
           Action:
           - s3:PutObject
           - s3:GetObject
-          Resource: !Sub "arn:aws:s3:::${S3Bucket}/*"
+          Resource: !Sub "arn:aws:s3:::${TFCStateBucket}/*"
         - Sid: S3ListBucketPolicy
           Effect: Allow
           Action:
           - s3:ListBucket
-          Resource: !Sub "arn:aws:s3:::${S3Bucket}"
+          Resource: !Sub "arn:aws:s3:::${TFCStateBucket}"
+        - Sid: SQSSendMessagePolicy
+          Effect: Allow
+          Action:
+          - sqs:SendMessage
+          Resource: !GetAtt FailedEventsQueue.Arn
+
+  FailedEventsQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "${Environment}-StateSaveFailedEvents"
+
+
+  # SQSProcessorFunction:
+  #   Type: AWS::Serverless::Function
+  #   Properties:
+  #     Handler: dlq.handler
+  #     Runtime: python3.12
+  #     CodeUri: webhook/
+  #     Description: "Lambda function that processes failed events from SQS and writes them to S3"
+  #     MemorySize: 128
+  #     Timeout: 10
+  #     Policies:
+  #       - CloudWatchLambdaInsightsExecutionPolicy
+  #       - S3WritePolicy  # Allow writing to S3
+  #       - SQSReceiveMessagePolicy  # Custom policy to read from SQS
+  #     Events:
+  #       SQSTrigger:
+  #         Type: SQS
+  #         Properties:
+  #           Queue: !GetAtt FailedEventsQueue.Arn
 
   LambdaInvokePermission:
     Type: AWS::Lambda::Permission
@@ -131,6 +168,6 @@ Parameters:
   Environment:
     Description: "Benchling environment"
     Type: String
-  S3Bucket:
+  TFCStateBucket:
     Description: "S3 bucket for state backups"
     Type: String

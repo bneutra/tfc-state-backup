@@ -10,5 +10,5 @@ I started this work from a fork using Terraform https://github.com/bneutra/terra
 
 ```
 sam build
-sam deploy --parameter-overrides Environment=foo-test S3Bucket=yourbucket-name
+sam deploy --parameter-overrides Environment=foo-test TFCStateBucket=yourbucket-name
 ```

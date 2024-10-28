@@ -13,8 +13,7 @@ import lib
 
 
 DRY_RUN = os.getenv("DRY_RUN", False)
-REGION = os.getenv("REGION", None)
-SALT_PATH = os.getenv("SALT_PATH", None)
+SALT_PATH = os.environ["SALT_PATH"]
 # run task requires this response body
 OK_RESPONSE = "200 OK"
 # map of what function to call based on the notification type
@@ -23,11 +22,11 @@ NOTIFICATIONS_MAP = {
 }
 # map of what function to call based on the run task stage (TBD)
 RUN_TASK_MAP = {
-    "post_apply": None,
+    "post_apply": "foo-bar",
 }
 
 # Initialize boto3 client at global scope for connection reuse
-session = boto3.Session(region_name=REGION)
+session = boto3.Session()
 ssm = session.client("ssm")
 
 
@@ -72,7 +71,9 @@ def notification_post(event: dict) -> dict:
             # if you want to test without having to apply a workspace
             #payload["workspace_id"] = "ws-123"
             #payload["workspace_name"] = "foo-bar
-            #invoke(os.environ["STATE_SAVE_FUNCTION"], payload)
+            payload["workspace_id"] = "ws-UsGJzkJChdDZCDnm"
+            payload["workspace_name"] = "dev--tf-deploy-dev-infrateam1b"
+            invoke(os.environ["STATE_SAVE_FUNCTION"], payload)
         elif body["run_status"] in NOTIFICATIONS_MAP:
             print("run_status indicates save the state file.")
             workspace_id = payload["workspace_id"]
@@ -95,7 +96,8 @@ def run_task_post(event: dict) -> dict:
     payload = json.loads(event["body"])
 
     if payload["stage"] is None:
-        ("Run stage set to null in payload. Test event?")
+        print("Run stage set to null in payload. Test event?")
+        return {"statusCode": 200, "body": OK_RESPONSE}
     elif payload["stage"] in RUN_TASK_MAP:
         workspace_id = payload["workspace_id"]
         workspace_name = payload["workspace_name"]
@@ -128,8 +130,3 @@ def invoke(function_name: str, tfc_payload: dict) -> None:
         InvocationType='Event',  # 'Event' for asynchronous execution
         Payload=json.dumps(tfc_payload)
     )
-    
-    return {
-        "statusCode": 200,
-        "body": f"Invoked {function_name} successfully"
-    }
