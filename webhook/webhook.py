@@ -68,12 +68,10 @@ def notification_post(event: dict) -> dict:
         body = payload["notifications"][0]
         if body["run_status"] is None:
             print("WARNING: run_status set to null in payload. Test event?")
-            # if you want to test without having to apply a workspace
+            # if you want to test the whole process from the TFC test event...
             #payload["workspace_id"] = "ws-123"
             #payload["workspace_name"] = "foo-bar
-            payload["workspace_id"] = "ws-UsGJzkJChdDZCDnm"
-            payload["workspace_name"] = "dev--tf-deploy-dev-infrateam1b"
-            invoke(os.environ["STATE_SAVE_FUNCTION"], payload)
+            #invoke(os.environ["STATE_SAVE_FUNCTION"], payload)
         elif body["run_status"] in NOTIFICATIONS_MAP:
             print("run_status indicates save the state file.")
             workspace_id = payload["workspace_id"]

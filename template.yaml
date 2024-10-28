@@ -5,24 +5,17 @@ Description: >
 
   Sample SAM Template for sam-statebackup
 
-# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
-Globals:
-  Function:
-    Timeout: 60
-    MemorySize: 512
-
 Resources:
   # API GW, public facing endpoint (TFC Webhook)
   WebhookFunction:
-  # Note: the log group is created by the Lambda function, on demand
-  # (weird, right?), IAM policy to write to logs as well.
-  # you could explicitly create it as well but that's not typical
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub "${Environment}-TFCWebhook"
       CodeUri: webhook/
       Handler: webhook.lambda_handler
       Runtime: python3.12
+      Timeout: 10
+      MemorySize: 128
       Architectures:
         - x86_64
       Environment:
@@ -75,6 +68,8 @@ Resources:
       Runtime: python3.12
       Architectures:
         - x86_64
+      Timeout: 30
+      MemorySize: 512
       Environment:
         Variables:
           TFC_TOKEN_PATH: !Sub "/${Environment}/TFC_TOKEN"
@@ -122,26 +117,60 @@ Resources:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: !Sub "${Environment}-StateSaveFailedEvents"
+      # backoff before triggering the DLQ Lambda
+      DelaySeconds: 600
 
 
-  # SQSProcessorFunction:
-  #   Type: AWS::Serverless::Function
-  #   Properties:
-  #     Handler: dlq.handler
-  #     Runtime: python3.12
-  #     CodeUri: webhook/
-  #     Description: "Lambda function that processes failed events from SQS and writes them to S3"
-  #     MemorySize: 128
-  #     Timeout: 10
-  #     Policies:
-  #       - CloudWatchLambdaInsightsExecutionPolicy
-  #       - S3WritePolicy  # Allow writing to S3
-  #       - SQSReceiveMessagePolicy  # Custom policy to read from SQS
-  #     Events:
-  #       SQSTrigger:
-  #         Type: SQS
-  #         Properties:
-  #           Queue: !GetAtt FailedEventsQueue.Arn
+  DLQProcessorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${Environment}-StateSaveDLQProcessor"
+      Handler: dlq.lambda_handler
+      Runtime: python3.12
+      CodeUri: webhook/
+      Description: "Lambda function that processes failed events from SQS and writes them to S3"
+      MemorySize: 512
+      Timeout: 30
+      Environment:
+        Variables:
+          TFC_TOKEN_PATH: !Sub "/${Environment}/TFC_TOKEN"
+          S3_BUCKET: !Ref TFCStateBucket
+          FAILED_EVENTS_QUEUE_URL: !Ref FailedEventsQueue
+      Events:
+        SQSTrigger:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt FailedEventsQueue.Arn
+      Policies:
+      - Statement:
+        - Sid: SSMDescribeParametersPolicy
+          Effect: Allow
+          Action:
+          - ssm:DescribeParameters
+          Resource: "*"
+        - Sid: SSMGetParameterPolicy
+          Effect: Allow
+          Action:
+          - ssm:GetParameters
+          - ssm:GetParameter
+          Resource: !Sub "arn:aws:ssm:*:*:parameter/${Environment}/TFC_TOKEN"
+        - Sid: S3PutObjectPolicy
+          Effect: Allow
+          Action:
+          - s3:PutObject
+          - s3:GetObject
+          Resource: !Sub "arn:aws:s3:::${TFCStateBucket}/*"
+        - Sid: S3ListBucketPolicy
+          Effect: Allow
+          Action:
+          - s3:ListBucket
+          Resource: !Sub "arn:aws:s3:::${TFCStateBucket}"
+        - Sid: SQSReadDeletePolicy
+          Effect: Allow
+          Action:
+          - sqs:ReceiveMessage
+          - sqs:DeleteMessage
+          Resource: !GetAtt FailedEventsQueue.Arn
 
   LambdaInvokePermission:
     Type: AWS::Lambda::Permission

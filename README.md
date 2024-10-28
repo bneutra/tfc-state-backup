@@ -7,6 +7,7 @@ TFC has two kinds of webhooks, notifications and run tasks. Run tasks are geared
 I started this work from a fork using Terraform https://github.com/bneutra/terraform-state-backer-upper. For reasons I won't go into I further developed the idea using SAM instead (but that other repo is a good reference if you want to use terraform). This repo:
 - has the state backup part done by a separate lambda, invoked by the webhook handling Lambda (idea: the webhook Lambda could handle many kinds of events and act as a router to other Lambdas to act on the events)
 - streams the state file to disk first (the previous version could encounter memory issues)
+- adds a DLQ functionality
 
 ```
 sam build
