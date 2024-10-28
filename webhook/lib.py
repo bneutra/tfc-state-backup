@@ -39,6 +39,17 @@ def save_state(s3_client, workspace_id: str, workspace_name: str, s3_bucket: str
     print(f"File successfully uploaded to s3://{s3_bucket}/{s3key}")
 
 
+def get_tfc_token(ssm_client, token_path: str ) -> str:
+    """Get the TFC token from the SSM parameter store."""
+    tfc_api_token = bytes(
+        ssm_client.get_parameter(Name=token_path, WithDecryption=True)["Parameter"][
+            "Value"
+        ],
+        "utf-8",
+    )
+    return tfc_api_token.decode("utf-8")
+
+
 def get_headers(token: str) -> dict:
     return {
         "Authorization": "Bearer " + token,

@@ -6,7 +6,7 @@ to an S3 bucket.
 
 import os
 import boto3
-from lib import save_state
+from lib import get_tfc_token, save_state
 
 DRY_RUN = bool(os.getenv("DRY_RUN", False))
 # required
@@ -15,21 +15,11 @@ TFC_TOKEN_PATH = os.environ["TFC_TOKEN_PATH"]
 # run task requires this response body
 OK_RESPONSE = "200 OK"
 
-def get_tfc_token() -> str:
-    """Get the TFC token from the SSM parameter store."""
-    tfc_api_token = bytes(
-        ssm.get_parameter(Name=TFC_TOKEN_PATH, WithDecryption=True)["Parameter"][
-            "Value"
-        ],
-        "utf-8",
-    )
-    return tfc_api_token.decode("utf-8")
-
 # Initialize some things at global scope for re-use
 session = boto3.Session()
-ssm = session.client("ssm")
+ssm_client = session.client("ssm")
 s3_client = boto3.client('s3')
-TOKEN = get_tfc_token()
+TOKEN = get_tfc_token(ssm_client, TFC_TOKEN_PATH)
 
 
 def lambda_handler(event: dict, context) -> dict:
