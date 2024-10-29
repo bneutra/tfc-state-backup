@@ -3,10 +3,10 @@ This re-runs the state save function in the event of a DLQ message.
 """
 import json
 import os
-from datetime import datetime
+
 import boto3
 
-from lib import get_s3_key, get_tfc_token, save_state
+from lib import get_tfc_token, save_state
 
 DRY_RUN = bool(os.getenv("DRY_RUN", False))
 # required
@@ -31,11 +31,6 @@ def lambda_handler(event: dict, context) -> dict:
         print(record)
         body = json.loads(record["body"])
         event = body["requestPayload"]
-        run_timestamp = event["run_created_at"]
-        run_datetime = datetime.strptime(run_timestamp, "%Y-%m-%dT%H:%M:%SZ")
-        if is_msg_stale(S3_BUCKET, get_s3_key(event["workspace_name"]), run_datetime):
-            print("Current s3 object is newer than this failed event, skipping save")
-            continue
         save_state(
             s3_client=s3_client,
             workspace_id=event["workspace_id"],
@@ -50,11 +45,5 @@ def lambda_handler(event: dict, context) -> dict:
         )
     return {"statusCode": 200, "body": OK_RESPONSE}
 
-def is_msg_stale(bucket: str, key: str, run_datetime: datetime) -> bool:
-    """Check if the s3 object is newer than the run_timestamp"""
-    response =  s3_client.head_object(Bucket=bucket, Key=key)
-    last_modified = response["LastModified"]
-    print(f"Last modified for {bucket}/{key} is: {last_modified}")
-    return last_modified > run_datetime
 
 

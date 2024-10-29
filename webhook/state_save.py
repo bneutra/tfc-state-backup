@@ -34,6 +34,3 @@ def lambda_handler(event: dict, context) -> dict:
         dry_run=DRY_RUN,
     )
     return {"statusCode": 200, "body": OK_RESPONSE}
-
-
-
