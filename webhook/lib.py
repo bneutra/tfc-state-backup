@@ -5,11 +5,6 @@ import json
 def save_state(s3_client, workspace_id: str, workspace_name: str, s3_bucket: str, tfc_token: str, dry_run:bool) -> None:
     """Save the state file to the S3 bucket."""
 
-    # TODO: in the event of an error, we could retry but I anticipiate
-    # throttling issues with the TFC API. One possible approach:
-    # record a marker object in S3 with the run ID and workspace name
-    # an hourly lambda could check for these markers and retry the save
-
     state_api_url = (
         "https://app.terraform.io/api/v2/workspaces/"
         + workspace_id
@@ -20,7 +15,7 @@ def save_state(s3_client, workspace_id: str, workspace_name: str, s3_bucket: str
     state_api_response = requests.get(state_api_url, headers=tfc_headers)
     state_api_response.raise_for_status()  # Ensure the request was successful
     state_response_payload = json.loads(state_api_response.text)
-    s3key = f"tfc-state-backup/{workspace_name}"
+    s3key = get_s3_key(workspace_name)
     if dry_run:
         print(f"DRY RUN: Not saving state file to {s3_bucket}/{s3key}")
         return
@@ -37,6 +32,10 @@ def save_state(s3_client, workspace_id: str, workspace_name: str, s3_bucket: str
                     temp_file.write(chunk)
         s3_client.upload_file(temp_file.name, s3_bucket, s3key)
     print(f"File successfully uploaded to s3://{s3_bucket}/{s3key}")
+
+
+def get_s3_key(workspace_name: str) -> str:
+    return f"tfc-state-backup/{workspace_name}.tfstate"
 
 
 def get_tfc_token(ssm_client, token_path: str ) -> str:
